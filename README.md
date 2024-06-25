@@ -2,7 +2,6 @@
 
 Dive into a world where evolution unfolds in pixels!
 
-[Add a short video demo here]
 
 PixelEvolution is an AI-generated simulation where organisms adapt and thrive (or perish!) in a virtual environment. Originally crafted by Claude 3.5 Sonnet with just a few prompts, this project is now open for exploration and improvement.
 
