@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PixelEvolution</title>
+    <style>
+   body {
+    font-family: Arial, sans-serif;
+    background-color: #1a1a1a;
+    color: #ffffff;
+    margin: 0;
+    padding: 10px; /* Reduced padding */
+    box-sizing: border-box;
+}
+
+.container {
+    display: flex;
+    flex-direction: row; /* Changed to row for horizontal layout */
+    align-items: flex-start; /* Align items to the top */
+    justify-content: space-between; /* Added to space items evenly */
+    gap: 10px;
+    max-width: 100%; /* Ensure it fits on all screens */
+}
+
+canvas {
+    border: 1px solid #ffffff;
+    max-width: 1280px; /* Limit canvas width for better layout */
+    height: 720px; /* Fixed height for the canvas */
+}
+
+.controls {
+    display: flex;
+    flex-direction: column; 
+    justify-content: flex-start; /* Align controls to the top */
+    gap: 10px;
+}
+
+h1 {
+    font-size: 1.5em; /* Reduced font size for the title */
+}
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        button, input, select {
+            background-color: #333333;
+            color: #ffffff;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            max-width: 100%;
+        }
+        button:hover {
+            background-color: #444444;
+        }
+        .leaderboard {
+            background-color: #333333;
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+            max-width: 200px;
+            box-sizing: border-box;
+        }
+        .leaderboard h3 {
+            margin-top: 0;
+            text-align: center;
+        }
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+                justify-content: center;
+                align-items: flex-start;
+            }
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .leaderboard {
+                margin-top: 0;
+                margin-left: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div>
+            <h1>PixelEvolution</h1>
+            <canvas id="simulationCanvas"></canvas>
+            <div class="controls">
+                <div class="control-group">
+                    <button id="startBtn">Start</button>
+                    <button id="pauseBtn">Pause</button>
+                    <button id="resetBtn">Reset</button>
+                </div>
+                <div class="control-group">
+                    <label for="speedSlider">Speed: <span id="speedValue">5x</span></label>
+                    <input type="range" id="speedSlider" min="1" max="10" value="5">
+                </div>
+                <div class="control-group">
+                    <label for="foodScarcity">Food Scarcity: <span id="foodScarcityValue">5</span></label>
+                    <input type="range" id="foodScarcity" min="1" max="10" value="5">
+                </div>
+                <div class="control-group">
+                    <label for="mutationRate">Mutation Rate: <span id="mutationRateValue">10%</span></label>
+                    <input type="range" id="mutationRate" min="0" max="100" value="10">
+                </div>
+                <div class="control-group">
+                    <label for="initialPopulation">Initial Population:</label>
+                    <input type="number" id="initialPopulation" min="10" max="200" value="50">
+                </div>
+                <div class="control-group">
+                    <label for="environmentType">Environment:</label>
+                    <select id="environmentType">
+                        <option value="normal">Normal</option>
+                        <option value="harsh">Harsh</option>
+                        <option value="abundant">Abundant</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="leaderboard">
+            <h3>Leaderboard</h3>
+            <div id="leaderboardContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedValue = document.getElementById('speedValue');
+        const foodScarcitySlider = document.getElementById('foodScarcity');
+        const foodScarcityValue = document.getElementById('foodScarcityValue');
+        const mutationRateSlider = document.getElementById('mutationRate');
+        const mutationRateValue = document.getElementById('mutationRateValue');
+        const initialPopulationInput = document.getElementById('initialPopulation');
+        const environmentTypeSelect = document.getElementById('environmentType');
+        const leaderboardContent = document.getElementById('leaderboardContent');
+
+        let simulation;
+        let isRunning = false;
+        let speed = 5;
+        let foodScarcity = 5;
+        let mutationRate = 10;
+        let initialPopulation = 50;
+        let environmentType = 'normal';
+
+        function resizeCanvas() {
+            const isMobile = window.innerWidth < 768;
+            const containerWidth = isMobile ? window.innerWidth - 20 : Math.min(600, window.innerWidth - 20);
+            const containerHeight = isMobile ? window.innerHeight * 0.4 : 400;
+            
+            canvas.width = containerWidth;
+            canvas.height = containerHeight;
+            
+            if (simulation) {
+                simulation.draw();
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Organism {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.originalColor = color; // Store original color
+        this.color = color; // Current color
+        this.size = 5;
+        this.speed = Math.random() * 2 + 1;
+        this.energy = 100;
+        this.generation = 1;
+        this.offspring = 0;
+    }
+
+    move() {
+        this.x += (Math.random() - 0.5) * this.speed;
+        this.y += (Math.random() - 0.5) * this.speed;
+        this.x = Math.max(0, Math.min(canvas.width, this.x));
+        this.y = Math.max(0, Math.min(canvas.height, this.y));
+        this.energy -= 0.1 * (environmentType === 'harsh' ? 1.5 : 1);
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.size, this.size);
+    }
+
+    mutate() {
+        if (Math.random() * 100 < mutationRate) {
+            // Mutation occurs
+            
+            // Adjust organism speed
+            this.speed += (Math.random() - 0.5) * 0.5;
+            this.speed = Math.max(0.5, Math.min(3, this.speed));
+            
+            // Keep original color
+            this.color = this.originalColor;
+        }
+    }
+}
+
+
+        class Simulation {
+            constructor() {
+                this.organisms = [];
+                this.resources = [];
+                this.speciesStats = new Map();
+                this.reset();
+            }
+
+            reset() {
+                this.organisms = [];
+                this.resources = [];
+                this.speciesStats.clear();
+                for (let i = 0; i < initialPopulation; i++) {
+                    let color = `rgb(${Math.random() * 255},${Math.random() * 255},${Math.random() * 255})`;
+                    this.organisms.push(new Organism(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        color
+                    ));
+                    this.speciesStats.set(color, { count: 1, totalOffspring: 0 });
+                }
+                this.generateResources();
+            }
+
+            generateResources() {
+    let resourceCount = Math.floor(100 / foodScarcity) * (environmentType === 'abundant' ? 2 : 1);
+    if (foodScarcity === 10) {
+        resourceCount = 0; // No resources spawn at maximum scarcity
+    } else if (foodScarcity === 1) {
+        resourceCount *= 2; // Double resources spawn at minimum scarcity
+    }
+    
+    for (let i = 0; i < resourceCount; i++) {
+        this.resources.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+        });
+    }
+}
+
+
+            update() {
+                this.organisms.forEach(org => {
+                    org.move();
+                    for (let i = 0; i < this.resources.length; i++) {
+                        let res = this.resources[i];
+                        if (Math.abs(org.x - res.x) < 5 && Math.abs(org.y - res.y) < 5) {
+                            org.energy += 10;
+                            this.resources.splice(i, 1);
+                            break;
+                        }
+                    }
+                    if (org.energy > 150) {
+                        let childOrg = new Organism(org.x, org.y, org.color);
+                        childOrg.generation = org.generation + 1;
+                        childOrg.mutate();
+                        this.organisms.push(childOrg);
+                        org.energy -= 50;
+                        org.offspring++;
+                        
+                        let stats = this.speciesStats.get(org.color) || { count: 0, totalOffspring: 0 };
+                        stats.count++;
+                        stats.totalOffspring++;
+                        this.speciesStats.set(org.color, stats);
+                        
+                        if (childOrg.color !== org.color) {
+                            let newStats = this.speciesStats.get(childOrg.color) || { count: 0, totalOffspring: 0 };
+                            newStats.count++;
+                            this.speciesStats.set(childOrg.color, newStats);
+                        }
+                    }
+                });
+
+                this.organisms = this.organisms.filter(org => {
+                    if (org.energy <= 0) {
+                        let stats = this.speciesStats.get(org.color);
+                        stats.count--;
+                        if (stats.count === 0) this.speciesStats.delete(org.color);
+                        else this.speciesStats.set(org.color, stats);
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (Math.random() < 0.1) {
+                    this.generateResources();
+                }
+
+                this.updateLeaderboard();
+            }
+
+            draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                this.organisms.forEach(org => org.draw());
+                ctx.fillStyle = 'white';
+                this.resources.forEach(res => {
+                    ctx.fillRect(res.x, res.y, 2, 2);
+                });
+            }
+
+            updateLeaderboard() {
+                let sortedSpecies = [...this.speciesStats.entries()]
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .slice(0, 5);
+
+                leaderboardContent.innerHTML = sortedSpecies.map(([color, stats]) => 
+                    `<div style="color:${color}">
+                        Population: ${stats.count}<br>
+                        Total offspring: ${stats.totalOffspring}
+                    </div>`
+                ).join('<hr>');
+            }
+        }
+
+        function gameLoop() {
+            if (isRunning) {
+                for (let i = 0; i < speed; i++) {
+                    simulation.update();
+                }
+                simulation.draw();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        startBtn.addEventListener('click', () => { isRunning = true; });
+        pauseBtn.addEventListener('click', () => { isRunning = false; });
+        resetBtn.addEventListener('click', () => { simulation.reset(); });
+
+        speedSlider.addEventListener('input', (e) => {
+            speed = parseInt(e.target.value);
+            speedValue.textContent = `${speed}x`;
+        });
+
+        foodScarcitySlider.addEventListener('input', (e) => {
+            foodScarcity = parseInt(e.target.value);
+            foodScarcityValue.textContent = foodScarcity;
+        });
+
+        mutationRateSlider.addEventListener('input', (e) => {
+            mutationRate = parseInt(e.target.value);
+            mutationRateValue.textContent = `${mutationRate}%`;
+        });
+
+        initialPopulationInput.addEventListener('change', (e) => {
+            initialPopulation = parseInt(e.target.value);
+        });
+
+        environmentTypeSelect.addEventListener('change', (e) => {
+            environmentType = e.target.value;
+        });
+
+        simulation = new Simulation();
+        gameLoop();
+    </script>
+</body>
+</html>
